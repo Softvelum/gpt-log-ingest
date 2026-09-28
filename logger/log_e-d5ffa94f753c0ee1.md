@@ -1,0 +1,52 @@
+# DVR audio segment duration is excessive
+
+Product: Nimble Streamer
+Component: DVR recording
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-d5ffa94f753c0ee1
+
+## Log pattern
+
+```text
+dropped invalid a_segment stream='%s' time=%llu start_time=%llu duration=%llu
+```
+
+## Parameters
+
+- Argument 1 — Stream: Text naming the application and stream.
+- Argument 2 — UTC time: Unsigned segment UTC time in milliseconds since the Unix epoch.
+- Argument 3 — Segment start: Unsigned media timestamp in the track timescale.
+- Argument 4 — Duration: Unsigned duration in whole seconds.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+dropped invalid a_segment stream='live/camera' time=1700000000000 start_time=90000 duration=301
+```
+
+## Short description
+
+DVR audio segment duration is excessive.
+
+## Trigger condition
+
+Invalid-segment dropping is enabled and the whole-second duration exceeds 300 seconds.
+
+## Explanation
+
+The segment is not added and the save operation returns failure so normal recording callers reset the period.
+
+## Possible causes
+
+- Invalid-segment dropping is enabled and the whole-second duration exceeds 300 seconds.
+
+## What to check
+
+1. Check input timestamps and unusually long recording segments.
+
+## Recommended action
+
+Check input timestamps and unusually long recording segments.

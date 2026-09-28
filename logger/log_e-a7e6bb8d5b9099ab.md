@@ -1,0 +1,47 @@
+# Publish notification queue full
+
+Product: Nimble Streamer
+Component: HTTP media delivery
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-a7e6bb8d5b9099ab
+
+## Log pattern
+
+```text
+publish notifications queue size=%llu
+```
+
+## Parameters
+
+- Argument 1 — Count: Current pending notification count before dropping the new event.
+
+The container size type is printed with an unsigned long-long conversion; exact compatibility depends on the platform.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+publish notifications queue size=10001
+```
+
+## Short description
+
+Publish notification queue full.
+
+## Trigger condition
+
+A new publish notification arrives while its pending queue already contains more than 10000 entries.
+
+## Explanation
+
+The new publish notification is discarded. The other notification queue is separate. Because the comparison is strictly greater, the queue can contain 10001 items.
+
+## Possible causes
+
+- A new publish notification arrives while its pending queue already contains more than 10000 entries.
+
+## What to check
+
+1. Check notification delivery progress and event volume.

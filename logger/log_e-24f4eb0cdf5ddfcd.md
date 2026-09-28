@@ -1,0 +1,48 @@
+# Video frame is out of order
+
+Product: Nimble Streamer
+Component: Timed local media sending
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-24f4eb0cdf5ddfcd
+
+## Log pattern
+
+```text
+video frame is out of order, delta=%lld, name=%s
+```
+
+## Parameters
+
+- Argument 1 — Time difference: Last queued same-media send time minus incoming send time, signed 64-bit milliseconds; sub-millisecond differences can print zero.
+- Argument 2 — Stream: Timecode sender stream name, text.
+
+The millisecond count is the duration representation type, passed without a cast to a signed long-long conversion. On platforms using signed long for that representation, the argument and conversion types differ.
+
+## Log examples
+
+The millisecond count is the duration representation type, passed without a cast to a signed long-long conversion. On platforms using signed long for that representation, the argument and conversion types differ. A reliable example is omitted because the original call does not ensure matching printf argument types.
+
+## Short description
+
+Video frame is out of order.
+
+## Trigger condition
+
+After passing past/future checks, the frame converted monotonic send time is earlier than the last queued video frame send time.
+
+## Explanation
+
+The incoming video frame is discarded and is not added to the timed send queue.
+
+## Possible causes
+
+- Timecodes arrived in decreasing order or clock changes altered the system-to-monotonic mapping.
+
+## What to check
+
+1. Check the order of incoming timecodes and sender clock changes.
+
+## Recommended action
+
+Correct timecode order, delay, or clock alignment before resuming timed output.

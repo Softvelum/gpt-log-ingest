@@ -1,0 +1,38 @@
+# AV1 decoder resets after a size change
+
+Product: Nimble Streamer
+Component: Video decoding
+Logging function: log_d
+Log level: debug
+Documentation ID: log_d-ba7bd2c41a59884f
+
+## Log pattern
+
+```text
+reset decoder on av1 params change for [%s/%s]
+```
+
+## Parameters
+
+- Argument 1 — Application: Application name, text.
+- Argument 2 — Stream: Stream name, text.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+reset decoder on av1 params change for [live/camera]
+```
+
+## Short description
+
+AV1 decoder resets after a size change.
+
+## Trigger condition
+
+Dynamic parameter changes are enabled, the decoder requires replacement on a change, and a sequence header reports different dimensions.
+
+## Explanation
+
+The old decoder is flushed and replaced, and output links are refreshed. The new sequence header is applied and decoding waits for a keyframe.

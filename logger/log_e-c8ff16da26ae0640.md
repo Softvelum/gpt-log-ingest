@@ -1,0 +1,46 @@
+# Requested SRT output stream unavailable
+
+Product: Nimble Streamer
+Component: SRT connections and session reporting
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-c8ff16da26ae0640
+
+## Log pattern
+
+```text
+requested stream doesn't exist s=%d, streamid=%s
+```
+
+## Parameters
+
+- Argument 1 — Socket: SRT socket identifier.
+- Argument 2 — Stream ID: Requested SRT stream identifier.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+requested stream doesn't exist s=101, streamid=/live/news
+```
+
+## Short description
+
+Requested SRT output stream unavailable.
+
+## Trigger condition
+
+No live media buffer exists for the requested application and stream after applying any SRT application alias.
+
+## Explanation
+
+The constant-bitrate wildcard output session fails setup.
+
+## Possible causes
+
+- No live media buffer exists for the requested application and stream after applying any SRT application alias.
+
+## What to check
+
+1. Check the requested stream, application alias, and whether the source is live.

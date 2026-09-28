@@ -1,0 +1,50 @@
+# CENC audio initialization parameters are unavailable
+
+Product: Nimble Streamer
+Component: Live stream codec and packaging setup
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-9dec45049edf8c9b
+
+## Log pattern
+
+```text
+failed to add cenc audio init segment for [%s/%s]
+```
+
+## Parameters
+
+- Argument 1 — Application: Application containing the affected live stream.
+- Argument 2 — Stream: Live stream name.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+failed to add cenc audio init segment for [live/camera]
+```
+
+## Short description
+
+CENC audio initialization parameters are unavailable.
+
+## Trigger condition
+
+Required DRM initialization parameters cannot be obtained for DASH or fragmented MP4 HLS audio.
+
+## Explanation
+
+The current segment is not added. DASH also finalizes/resets the pending segment timing; HLS returns a failure from encryption setup and leaves publication to a later attempt.
+
+## Possible causes
+
+- Required DRM initialization parameters cannot be obtained for DASH or fragmented MP4 HLS audio.
+
+## What to check
+
+1. Check the DRM/key-service diagnostics and the encryption configuration for this stream.
+
+## Recommended action
+
+Restore successful DRM parameter retrieval before retrying encrypted output.

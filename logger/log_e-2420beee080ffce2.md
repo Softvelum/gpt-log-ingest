@@ -1,0 +1,49 @@
+# RTMP metadata content title cannot be decoded
+
+Product: Nimble Streamer
+Component: RTMP media input
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-2420beee080ffce2
+
+## Log pattern
+
+```text
+cannot process AMF. get title(%s)
+```
+
+## Parameters
+
+- Argument 1 — Stream: Application and stream name associated with this RTMP message stream; it can be empty before association.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+cannot process AMF. get title(live/camera)
+```
+
+## Short description
+
+RTMP metadata content title cannot be decoded.
+
+## Trigger condition
+
+The title metadata field cannot be read as an AMF string.
+
+## Explanation
+
+Further field decoding stops. The original metadata has already been stored; the handler still attempts to build audio metadata and apply the values decoded so far. This log alone does not shut down the connection.
+
+## Possible causes
+
+- The title metadata field cannot be read as an AMF string.
+
+## What to check
+
+1. Check the title field type, its length, and whether the metadata message is complete.
+
+## Recommended action
+
+Correct the title metadata encoding at the source.

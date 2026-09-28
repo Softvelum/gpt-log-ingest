@@ -1,0 +1,38 @@
+# Explicit video packet selected
+
+Product: Nimble Streamer
+Component: MPEG-TS live stream selection
+Logging function: log_d
+Log level: debug
+Documentation ID: log_d-f4bab2c220cc6232
+
+## Log pattern
+
+```text
+updateAvailable video type explicitly set found pid=%d type=%d
+```
+
+## Parameters
+
+- Argument 1 — packet\_id: MPEG-TS packet identifier printed as a decimal integer.
+- Argument 2 — stream\_type: Numeric media stream-type code printed in decimal; this is not a packet identifier.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+updateAvailable video type explicitly set found pid=256 type=27
+```
+
+## Short description
+
+Explicit video packet selected.
+
+## Trigger condition
+
+An availability update for the matching input contains the configured nonzero video packet identifier.
+
+## Explanation
+
+The identifier is added to the requested input set and stored as the active video selection. The advertised stream type is stored; this trace can repeat without a type change.

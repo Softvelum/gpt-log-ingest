@@ -1,0 +1,47 @@
+# Socket event processing raised an unclassified exception
+
+Product: Nimble Streamer
+Component: HTTP request workers
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-d51e2b4a4bfa4acc
+
+## Log pattern
+
+```text
+unknown exception caught while processing session=%p s=%d event=%d
+```
+
+## Parameters
+
+- Argument 1 — Session: Connection-session address used for diagnostic correlation.
+- Argument 2 — Socket: Integer socket descriptor.
+- Argument 3 — Event mask: Decimal bit mask of the socket event.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+unknown exception caught while processing session=0x1000 s=12 event=1
+```
+
+## Short description
+
+Socket event processing raised an unclassified exception.
+
+## Trigger condition
+
+An HTTP or advertising-download session throws while processing a socket event.
+
+## Explanation
+
+The session is marked finished and deleted by the event-processing cleanup.
+
+## Possible causes
+
+- The session event handler raised an exception.
+
+## What to check
+
+1. Inspect the session, socket and event and preceding diagnostics.

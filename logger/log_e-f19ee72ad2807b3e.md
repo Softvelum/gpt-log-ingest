@@ -1,0 +1,53 @@
+# RTMP publishing transport send fails
+
+Product: Nimble Streamer
+Component: RTMP connection transport
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-f19ee72ad2807b3e
+
+## Log pattern
+
+```text
+failed to ssl_send buffer for s=%d [%s:%d/%s/%s]
+```
+
+## Parameters
+
+- Argument 1 — Socket: Operating-system socket descriptor for this connection.
+- Argument 2 — Destination host: Publishing destination host.
+- Argument 3 — Destination port: Publishing destination TCP port.
+- Argument 4 — Application: Destination application name.
+- Argument 5 — Stream: Destination stream name.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+failed to ssl_send buffer for s=42 [destination.example:1935/live/camera]
+```
+
+## Short description
+
+RTMP publishing transport send fails.
+
+## Trigger condition
+
+The outbound publisher reports a failed TLS send.
+
+## Explanation
+
+The current output operation cannot complete and its connection failure path is taken. The destination fields identify which publishing route was affected.
+
+## Possible causes
+
+- The outbound publisher reports a failed TLS send.
+
+## What to check
+
+1. Check the destination availability, connection errors, and remote publish acceptance.
+
+## Recommended action
+
+Resolve the transport failure before the route reconnects.

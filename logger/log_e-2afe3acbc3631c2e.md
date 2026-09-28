@@ -1,0 +1,50 @@
+# Audio frame does not fit the advertising boundary output
+
+Product: Nimble Streamer
+Component: Advertising
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-2afe3acbc3631c2e
+
+## Log pattern
+
+```text
+cannot write mpeg2ts audio, used_size=%u, frame_size=%u
+```
+
+## Parameters
+
+- Argument 1 — Used bytes: Unsigned number of bytes already in the output buffer.
+- Argument 2 — Frame bytes: Unsigned size of the media frame in bytes.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+cannot write mpeg2ts audio, used_size=65536, frame_size=8192
+```
+
+## Short description
+
+Audio frame does not fit the advertising boundary output.
+
+## Trigger condition
+
+Writing an audio frame into the MPEG-TS section before or after an advertisement raises a buffer-size exception.
+
+## Explanation
+
+The remainder request is marked failed.
+
+## Possible causes
+
+- Writing an audio frame into the MPEG-TS section before or after an advertisement raises a buffer-size exception.
+
+## What to check
+
+1. Check the output buffer limit against the current contents and audio frame size.
+
+## Recommended action
+
+Check the output buffer limit against the current contents and audio frame size.

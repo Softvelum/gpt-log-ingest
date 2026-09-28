@@ -1,0 +1,52 @@
+# Video transport buffer cannot grow
+
+Product: Nimble Streamer
+Component: Live media packaging and timed metadata
+Logging function: log_e
+Log level: error
+Documentation ID: log_e-fa778b8327b9eeba
+
+## Log pattern
+
+```text
+[VM] cannot allocate buffer message body for [%s/%s], used_size=%u, frame_size=%u
+```
+
+## Parameters
+
+- Argument 1 — Application: Application containing the live stream.
+- Argument 2 — Stream: Live stream name.
+- Argument 3 — Used size: Bytes already used in the affected output buffer.
+- Argument 4 — Frame size: Media payload size in bytes, including any prepared transport header.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+[VM] cannot allocate buffer message body for [live/camera], used_size=1048576, frame_size=65536
+```
+
+## Short description
+
+Video transport buffer cannot grow.
+
+## Trigger condition
+
+A transport buffer cannot reserve its used bytes plus one 188-byte packet and twice the complete video-frame size. This covers HLS and MPEG-TS over HTTP for transport-formatted or HEVC video, and MPEG-TS over HTTP for AV1.
+
+## Explanation
+
+The current video-processing call fails. Other enabled outputs may already have received this frame before this transport-packaging failure.
+
+## Possible causes
+
+- A transport buffer cannot reserve its used bytes plus one 188-byte packet and twice the complete video-frame size. This covers HLS and MPEG-TS over HTTP for transport-formatted or HEVC video, and MPEG-TS over HTTP for AV1.
+
+## What to check
+
+1. Compare current buffer use and complete frame size with memory availability and buffer limits.
+
+## Recommended action
+
+Resolve oversized input frames or the output-buffer capacity problem.

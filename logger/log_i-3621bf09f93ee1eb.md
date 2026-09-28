@@ -1,0 +1,53 @@
+# DVR audio period resets to preserve protocol time
+
+Product: Nimble Streamer
+Component: DVR recording
+Logging function: log_i
+Log level: info
+Documentation ID: log_i-3621bf09f93ee1eb
+
+## Log pattern
+
+```text
+reset period=%u to keep proto start time stream='%s' a_segment time=%llu start_time=%llu proto_start_time=%llu
+```
+
+## Parameters
+
+- Argument 1 — Recording period: Unsigned identifier of the current recording period.
+- Argument 2 — Stream: Text naming the application and stream.
+- Argument 3 — UTC time: Unsigned segment UTC time in milliseconds since the Unix epoch.
+- Argument 4 — Segment start: Unsigned media timestamp in the track timescale.
+- Argument 5 — Protocol start: Unsigned incoming presentation timestamp in the track timescale.
+
+## Log examples
+
+Illustrative examples; these are not captured server logs.
+
+```text
+reset period=1 to keep proto start time stream='live/camera' a_segment time=1700000000000 start_time=90000 proto_start_time=180000
+```
+
+## Short description
+
+DVR audio period resets to preserve protocol time.
+
+## Trigger condition
+
+Protocol timestamp preservation is enabled and the stored segment start differs from the incoming protocol start.
+
+## Explanation
+
+The segment has already been submitted to storage; the save operation asks its caller to reset the recording period.
+
+## Possible causes
+
+- Protocol timestamp preservation is enabled and the stored segment start differs from the incoming protocol start.
+
+## What to check
+
+1. Check timestamp adjustments and the protocol-time preservation setting.
+
+## Recommended action
+
+Check timestamp adjustments and the protocol-time preservation setting.
