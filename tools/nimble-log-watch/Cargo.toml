@@ -1,0 +1,12 @@
+[package]
+name = "nimble-log-watch"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "Incremental, grouped reader for Nimble Streamer runtime logs"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+notify = "=6.1.1"

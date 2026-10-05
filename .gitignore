@@ -1,0 +1,8 @@
+# Each user's log paths, instructions, checkpoints, and reports.
+/.local/
+
+# Python's generated test bytecode.
+__pycache__/
+
+# Rust build output for the optional local log watcher.
+/tools/nimble-log-watch/target/

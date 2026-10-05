@@ -1,0 +1,7 @@
+[2026-10-05 10:00:00 P100-T200] [main] E: failed to detect country code for '8.8.8.8'
+[2026-10-05 10:00:01 P100-T200] [main] E: failed to detect country code for '2001:4860:4860::8888'
+[2026-10-05 10:00:02 P100-T200] [main] E: synthetic unmapped media failure 42
+[2026-10-05 10:01:00 P100-T200] [main] V: verbose diagnostic says error but is not an error-level record
+[2026-10-05 10:01:01 P100-T200] [main] D: debug trace says failure but is not an error-level record
+[2026-10-05 10:01:02 P100-T200] [main] I: info event says error but is not an error-level record
+[2026-10-05 10:01:03 P100-T200] [main] I: info event says error but is not an error-level record

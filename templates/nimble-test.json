@@ -1,0 +1,11 @@
+{
+  "mode": "launch",
+  "executable": "/path/to/nimble",
+  "working_directory": "/path/to/working-directory",
+  "arguments": [
+    "--config-file=/path/to/nimble.conf",
+    "--rules=/path/to/rules.conf"
+  ],
+  "duration_seconds": 10,
+  "stop_after_test": true
+}
