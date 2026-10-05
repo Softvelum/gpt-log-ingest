@@ -1,11 +1,5 @@
 # Nimble log catalog
 
-Fixed log formats, grouped by logging function.
-
-Counts are independent for each logging function. All source build branches are included.
-
-Runtime-built calls without an exhaustive fixed-string set: 8.
-
 | Logging function | Unique fixed formats |
 |---|---:|
 | `log_always` | 7 |
