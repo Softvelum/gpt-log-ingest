@@ -1,5 +1,7 @@
 # Nimble log catalog
 
+Each of the following files describes one log entry on [Nimble Streamer](https://softvelum.com/nimble/) software media server.
+
 | Logging function | Unique fixed formats |
 |---|---:|
 | `log_always` | 7 |
