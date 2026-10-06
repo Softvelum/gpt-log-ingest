@@ -75,7 +75,7 @@ unrecoverable or repeated reporting gaps end the watch with an explicit status.
 | `logger/search-index.json` | Generated candidate index; Markdown remains authoritative |
 | `logger/README.md` | Existing message index, relocated beside its entries |
 | `logger/*.md` | Product message knowledge |
-| `manifest.json` | Existing catalog generation metadata |
+| `logger/manifest.json` | Existing catalog generation metadata |
 | `.local/` | Ignored user settings, instructions, optional state and reports |
 
 ## Shared skills
