@@ -108,7 +108,7 @@ records when the user's question asks for those levels or they provide needed
 context. Do not omit useful context solely because it is not marked `E`.
 Resolve related-message links relative to the entry and read them when they help
 distinguish a failure, a retry, or recovery.
-`manifest.json` records catalog generation metadata; its entry basenames
+`logger/manifest.json` records catalog generation metadata; its entry basenames
 refer to `logger/`. It is not a runtime matcher or a guarantee of current
 file checksums or coverage for every Nimble build.
 

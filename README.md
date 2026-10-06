@@ -211,7 +211,7 @@ after the agent turn ends will not continue chat reporting.
 The catalog currently contains 3,410 fixed-message descriptions. Documentation
 IDs identify entries; they are not runtime message IDs. Some runtime or
 build-specific messages may have no matching description. The existing
-[manifest](manifest.json) describes the generated catalog snapshot; it is not
+[manifest](logger/manifest.json) describes the generated catalog snapshot; it is not
 an analysis engine or a guarantee that edited files retain snapshot checksums.
 
 ## Run tests
