@@ -51,6 +51,8 @@ Launch the agent from this clone so it can discover the repository skill.
 |---|---|---|
 | Codex | `$nimble-logs` | [.agents/skills/nimble-logs/SKILL.md](.agents/skills/nimble-logs/SKILL.md) |
 | Claude Code | `/nimble-logs` | [.claude/skills/nimble-logs/SKILL.md](.claude/skills/nimble-logs/SKILL.md) |
+| Codex | `$whep-check` | [.agents/skills/whep-check/SKILL.md](.agents/skills/whep-check/SKILL.md) |
+| Claude Code | `/whep-check` | [.claude/skills/whep-check/SKILL.md](.claude/skills/whep-check/SKILL.md) |
 
 For example, in Codex:
 
@@ -194,6 +196,47 @@ the missing output. If the client cannot continue polling, the agent should
 stop the helper and explain the limit. A local watcher process left running
 after the agent turn ends will not continue chat reporting.
 
+## Check WHEP playback
+
+When a WebRTC WHEP player does not start, logs alone often cannot show why:
+signaling may succeed while the media path fails. The `whep-check` skill uses a
+small Go client in [tools/whep-check](tools/whep-check/) that acts as a WHEP
+player and reports which stage failed.
+
+```text
+/whep-check Check WHEP playback of https://media.example/live/stream/whep.stream
+and explain why the player does not start.
+```
+
+The check opens one real viewer session per run, so the agent runs it only when
+you ask and only for the URL you supply. It never changes Nimble or firewall
+settings; it proposes changes instead. Log analysis and workspace tests never
+run it. Build it with Go 1.22 or later:
+
+```bash
+go build -C tools/whep-check -o whep-check .
+tools/whep-check/whep-check https://media.example/live/stream/whep.stream
+```
+
+| Exit code | Meaning |
+|---|---|
+| `0` | Connected and received media |
+| `2` | WHEP signaling failed (HTTP status or answer) |
+| `3` | Signaling worked, but ICE/DTLS did not connect: usually UDP to the server candidate is blocked |
+| `4` | Connected, but no media arrived |
+
+The output includes UTC timestamps, the server's ICE candidates (address and
+UDP port), ICE/DTLS state, the selected candidate pair, and packet, bitrate,
+and keyframe counts. Add `-stun stun:stun.l.google.com:19302` to confirm that
+your own network passes UDP, or `-v` for ICE/DTLS debug output.
+
+To watch the stream on a machine with a display and `ffplay`, run
+`whep-check -play <url>` until Ctrl+C. To save it, use `-record <dir>`. Static
+binaries for another OS can be cross-compiled, for example
+`CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -C tools/whep-check -o whep-check.exe .`.
+See [the WHEP check workflow](workflows/check-whep.md) for interpretation,
+including Nimble's WHEP UDP port settings and firewall rules.
+
 ## How the instructions fit together
 
 | Resource | Used for |
@@ -203,6 +246,7 @@ after the agent turn ends will not continue chat reporting.
 | The two `nimble-logs` skills | Convenient discovery and explicit invocation |
 | [Shared workflow](workflows/analyze-logs.md) | Setup, queries, evidence, and active watching |
 | [Test workflow](workflows/test-workspace.md) | Repository checks and read-only or separate-instance log tests |
+| [WHEP check workflow](workflows/check-whep.md) | Explicit WHEP playback checks with `tools/whep-check` |
 | `.local/settings.md` | Your saved log location and defaults |
 | `.local/user-instructions.md` | Your analysis and reporting preferences |
 | `.local/nimble-test.json` | Explicit test mode and optional launch parameters |
@@ -268,6 +312,13 @@ check that it matches the source files:
 python3 scripts/build_logger_map.py
 python3 scripts/build_logger_map.py --check
 cargo test --locked --manifest-path tools/nimble-log-watch/Cargo.toml
+```
+
+When changing the WHEP client, run its offline tests. They use an in-process
+WHEP server and do not contact real endpoints:
+
+```bash
+(cd tools/whep-check && go vet ./... && go test ./...)
 ```
 
 ## Contributing

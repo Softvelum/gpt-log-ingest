@@ -20,6 +20,11 @@ catalog-index coverage, local ignore rules, and the launch-profile template.
 It never starts Nimble or invokes an AI client. Passing it proves those
 structural properties, not that an agent made a correct diagnosis.
 
+When the change touches `tools/whep-check`, also run `go vet ./...` and
+`go test ./...` in that directory. These tests use an in-process WHEP server.
+Never run the WHEP client against a real endpoint as part of workspace or
+commit tests; [WHEP checks](check-whep.md) are separate, explicit requests.
+
 Exercise relevant cases in [the behavioral scenarios](../tests/scenarios.md)
 when changing analysis or test behavior. Run them in a temporary workspace,
 using synthetic fixtures and local preferences rather than real installation

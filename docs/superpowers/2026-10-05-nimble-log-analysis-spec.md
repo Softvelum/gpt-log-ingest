@@ -19,6 +19,9 @@ This specifies the Markdown analysis workspace and its test procedure described 
   helpers. Helpers do not launch/control Nimble or call an AI model.
 - Ordinary analysis and live/user-started installation tests only read log
   files and never control or probe the Nimble process.
+- The optional WHEP playback check is a separate, explicitly requested task.
+  It opens bounded viewer sessions to a user-supplied URL and never controls
+  or reconfigures Nimble.
 
 ## Repository entry points
 
@@ -39,6 +42,10 @@ This specifies the Markdown analysis workspace and its test procedure described 
    documented as a guaranteed automatic setup trigger.
 7. Both skills and repository instructions route test requests to
    `workflows/test-workspace.md`. Unit tests verify both workflow routes.
+8. `.agents/skills/whep-check/SKILL.md` is the canonical WHEP check skill, with
+   a `.claude/skills/whep-check` directory symlink. It routes to
+   `workflows/check-whep.md`; `AGENTS.md` routes WHEP check requests there.
+   Invocation is `$whep-check` in Codex and `/whep-check` in Claude.
 
 ## Local setup and user instructions
 
@@ -187,6 +194,39 @@ Suggested remediation does not authorize modifying Nimble or its configuration.
     the helper. Do not use metrics-only mode to hide message bodies during an
     ordinary event watch.
 
+## WHEP playback check
+
+1. Run `tools/whep-check` only on an explicit request to check WHEP playback,
+   with a URL the user supplied. Do not derive endpoints from logs or
+   configuration. Never run it during log analysis or workspace/commit tests.
+2. Build with Go 1.22 or later. When Go is unavailable, explain the build steps
+   for another machine instead of substituting another network tool.
+3. Each run performs one WHEP `POST` with a receive-only SDP offer, connects,
+   receives media for a bounded duration (default 20 seconds) or until
+   interrupted, and sends `DELETE` to the returned `Location` on exit. ICE/DTLS
+   has a bounded timeout (default 15 seconds). Repeat runs only on request or
+   to distinguish hypotheses.
+4. Output carries UTC timestamps and reports the HTTP status, timing, ice-lite
+   mode, negotiated codecs, server candidates, ICE/DTLS states, selected
+   candidate pair, RTP packets, bitrate, and H.264 keyframes. Exit codes:
+   `0` media received, `1` usage, `2` signaling, `3` ICE/DTLS, `4` connected
+   without media. A private server candidate address produces a warning.
+5. `-play` forwards decrypted RTP to local ports and an SDP file for `ffplay`
+   or VLC, and requires a graphical session. `-record` writes raw H.264 and
+   Ogg/Opus files. `-stun` adds a server-reflexive candidate to verify that
+   outbound UDP leaves the client network.
+6. Interpretation separates signaling, transport, and media stages. Before
+   attributing an ICE failure to the server, check client-side UDP. Explain
+   that a plain `GET` of a WHEP URL is not a WHEP request. Firewall and Nimble
+   `whep_config.json` changes remain proposals for the user.
+7. Redact URL signatures and tokens in reports; pass bearer tokens through
+   `-token`. State what was not verified, such as visual quality without
+   playback, other client networks, and missing server logs.
+8. The client's Go tests use an in-process ice-lite WHEP server with synthetic
+   RTP. They verify success with media and resource deletion, a signaling
+   failure, and an unreachable-candidate ICE failure without contacting real
+   endpoints.
+
 ## Catalog and contributor maintenance
 
 1. Move the existing long root index to `logger/README.md` so its relative
@@ -206,7 +246,7 @@ Suggested remediation does not authorize modifying Nimble or its configuration.
    promise a capability deferred by this specification.
 6. Contributor review is guidance in `AGENTS.md`, not an automatically installed
    pre-commit hook or a technical enforcement mechanism.
-7. After all required repository, behavior, map, and Rust tests, contributors
+7. After all required repository, behavior, map, Rust, and Go tests, contributors
    review the full working tree before committing. The review covers staged and
    unstaged changes, untracked files, and hidden or ignored repository-local
    files that could be staged. It checks for private key/certificate files,
@@ -223,7 +263,8 @@ Suggested remediation does not authorize modifying Nimble or its configuration.
    structure. It does not start Nimble or an AI client.
 2. `python3 scripts/build_logger_map.py --check` verifies the generated index;
    `cargo test --locked --manifest-path tools/nimble-log-watch/Cargo.toml`
-   verifies Rust parsing and grouping.
+   verifies Rust parsing and grouping. `go test ./...` in `tools/whep-check`
+   verifies the WHEP client offline.
 3. `tests/scenarios.md` defines agent behavior checks using explicitly synthetic
    fixtures. Report cases actually exercised separately from structural results.
 4. For an agent-driven test request or commit test stage, a supplied/configured
@@ -299,3 +340,11 @@ Suggested remediation does not authorize modifying Nimble or its configuration.
   Nimble, including at commit-test time and when the user started the instance.
 - A managed smoke test, when explicitly configured, attributes fresh log output
   to the owned process and reports actual startup and cleanup status.
+- The `whep-check` skill passes the same frontmatter and symlink checks and
+  links to `workflows/check-whep.md`. `AGENTS.md` routes WHEP checks there.
+- `go vet ./...` and `go test ./...` pass in `tools/whep-check` without network
+  access to real endpoints. The tests cover media receipt with `DELETE`,
+  signaling failure, and ICE timeout.
+- A log-analysis or test request does not run the WHEP client. A WHEP check
+  request without a URL asks for one; a supplied URL is checked once and
+  reported by stage with redacted secrets.

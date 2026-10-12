@@ -206,3 +206,26 @@ The behavior scenario for poll-to-chat relaying is documented but was not
 simulated in a separate native Codex or Claude client. The live watcher remained
 active during this documentation change; that confirms tool-session output can
 be polled in this client, not an automatic push binding after a turn ends.
+
+## WHEP playback check skill
+
+`go vet ./...` and `go test -race ./...` passed in `tools/whep-check` with Go
+1.22.2 and Pion WebRTC v4.0.16. The in-process ice-lite WHEP server tests showed:
+
+- A connected session received synthetic H.264 and Opus RTP, detected H.264
+  keyframes, recorded non-empty `video.h264` and `audio.ogg` files, and sent
+  one `DELETE`.
+- An HTTP 404 answer produced the signaling exit code.
+- A server peer closed after answering produced the ICE timeout exit code, and
+  the client still sent `DELETE`.
+
+Unit tests cover H.264 keyframe detection for single NAL, STAP-A, and FU-A
+payloads, and candidate address parsing. No real endpoint was contacted by the
+tests.
+
+The Python suite passed (17 tests), including frontmatter, symlink, and routing
+checks for the new skill. The logger map was current, `git diff --check`
+passed, and the client binary and `dist/` output are ignored. Claude Code
+listed the `whep-check` skill through its `.claude/skills` symlink. Codex
+discovery and the new behavior scenarios were not exercised in separate native
+clients. Real-endpoint use is an explicit user task outside these tests.

@@ -19,6 +19,15 @@ task. Current user requests override saved defaults. Keep source logs read-only
 and user-specific settings, checkpoints, and reports under ignored `.local/`
 unless the user requests a different output location.
 
+## WHEP playback checks
+
+When asked to check WebRTC WHEP playback from an endpoint URL, or to explain
+why a WHEP player does not start, read and follow
+[workflows/check-whep.md](workflows/check-whep.md). That check opens a real
+viewer session, so run it only on an explicit request for a user-supplied URL.
+Never run it during log analysis or workspace tests, and never apply server or
+firewall changes; propose them instead.
+
 For repository editing or documentation questions, follow the contributor
 instructions below; do not trigger log setup or ask for a log directory.
 
@@ -46,12 +55,13 @@ The maintained behavior is described in:
 - [Specification](docs/superpowers/2026-10-05-nimble-log-analysis-spec.md)
 - [Implementation plan](docs/superpowers/plans/2026-10-05-nimble-log-analysis.md)
 
-Read the design and specification before changing `README.md`, either skill,
-the workflow, templates, or repository instructions. Keep the analysis procedure
-in `workflows/analyze-logs.md`. `.agents/skills/nimble-logs/SKILL.md` is the
-canonical skill; `.claude/skills/nimble-logs` must be a directory symlink to
-that skill directory so both clients discover one maintained file. `CLAUDE.md`
-imports this file.
+Read the design and specification before changing `README.md`, any skill,
+the workflows, templates, or repository instructions. Keep the analysis procedure
+in `workflows/analyze-logs.md` and the WHEP check procedure in
+`workflows/check-whep.md`. Each skill's canonical file is
+`.agents/skills/<name>/SKILL.md` (`nimble-logs`, `whep-check`);
+`.claude/skills/<name>` must be a directory symlink to that skill directory so
+both clients discover one maintained file. `CLAUDE.md` imports this file.
 
 Before committing a change to those files:
 
@@ -77,13 +87,15 @@ Before committing a change to those files:
    monitoring checks not run; structural success is not an overall test pass.
 6. Run `python3 scripts/build_logger_map.py --check` after catalog changes and
    `cargo test --locked --manifest-path tools/nimble-log-watch/Cargo.toml`
-   when changing the Rust watcher or its parser. Keep `logger/search-index.json`
-   generated from Markdown; do not hand-edit it.
+   when changing the Rust watcher or its parser. Run `go vet ./...` and
+   `go test ./...` in `tools/whep-check` when changing the WHEP client; its
+   tests use an in-process WHEP server and must not contact real endpoints.
+   Keep `logger/search-index.json` generated from Markdown; do not hand-edit it.
    Watcher changes must also exercise the Python fallback, Rust change-triggered
    behavior, tagged status, and per-stage timings on synthetic logs. Real-log
    performance checks must use `--metrics-only` and report coverage without
    exposing message contents.
-7. After all repository, behavior, map, and Rust tests finish, perform a full
+7. After all repository, behavior, map, Rust, and Go tests finish, perform a full
    working-tree security review before committing. Inspect staged and unstaged
    changes, untracked files, and hidden or ignored repository-local files that
    could be staged. Look for private key or certificate files (including

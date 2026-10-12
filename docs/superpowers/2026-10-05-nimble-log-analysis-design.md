@@ -21,6 +21,11 @@ Nimble instance. The agent asks for missing launch details and may stop only
 the process it actually started. It never controls Nimble during ordinary
 analysis or read-only/live-installation testing.
 
+The WHEP playback extension adds a second repository skill, `whep-check`. It
+is a Go WebRTC client and workflow that checks a user-supplied WHEP endpoint
+by opening one bounded viewer session. It reports signaling, ICE/DTLS, and media
+results, and it is never part of log analysis or workspace tests.
+
 The behavioral contract is in the companion
 [specification](2026-10-05-nimble-log-analysis-spec.md). Implementation steps
 are in the [plan](plans/2026-10-05-nimble-log-analysis.md).
@@ -61,8 +66,10 @@ unrecoverable or repeated reporting gaps end the watch with an explicit status.
 | `CLAUDE.md` | Import `AGENTS.md` for Claude Code |
 | `.agents/skills/nimble-logs/SKILL.md` | Codex discovery and invocation |
 | `.claude/skills/nimble-logs/SKILL.md` | Claude discovery and invocation |
+| `.agents/skills/whep-check/SKILL.md` | WHEP check skill (Claude path is a symlink) |
 | `workflows/analyze-logs.md` | Shared setup, query, report, and watch procedure |
 | `workflows/test-workspace.md` | Repository checks and explicit observe/launch test modes |
+| `workflows/check-whep.md` | Explicit WHEP playback check and result interpretation |
 | `templates/settings.md` | Example local directory, timezone, file selection |
 | `templates/user-instructions.md` | Example user analysis preferences |
 | `templates/nimble-test.json` | Example separate-instance launch profile |
@@ -72,6 +79,7 @@ unrecoverable or repeated reporting gaps end the watch with an explicit status.
 | `scripts/build_logger_map.py` | Rebuild/check the generated catalog term index |
 | `scripts/nimble_log_watch.py` | Python 3 fallback incremental watcher |
 | `tools/nimble-log-watch/` | Recommended Rust incremental watcher |
+| `tools/whep-check/` | Go WHEP playback client and its offline tests |
 | `logger/search-index.json` | Generated candidate index; Markdown remains authoritative |
 | `logger/README.md` | Existing message index, relocated beside its entries |
 | `logger/*.md` | Product message knowledge |
@@ -90,6 +98,10 @@ workflow references remain valid.
 Both entry points resolve the repository root from their own location, not
 from a presumed current working directory. They are repository skills:
 copying an entry point alone into a global skills directory is unsupported.
+
+The `whep-check` skill follows the same layout: the canonical
+`.agents/skills/whep-check/SKILL.md` and a `.claude/skills/whep-check`
+directory symlink, both routing to `workflows/check-whep.md`.
 
 Test requests route to `workflows/test-workspace.md`; ordinary analysis still
 routes to `workflows/analyze-logs.md`. The selected task determines the route,
@@ -162,6 +174,40 @@ prefix. It reports the discarded range as a coverage gap. The
 workflow requires explaining gaps and distinguishing `[WATCH]` output from
 `[ANALYSIS]` in the conversation. It does not promise unattended or lossless
 monitoring.
+
+## WHEP playback check
+
+Log analysis can show that WHEP sessions were registered and later closed, but
+the WebRTC media path is often decided outside the log. Typical causes are
+unreachable ICE candidates, blocked UDP, or a missing media stream. The
+`whep-check` client reproduces a player from the agent's host or the user's
+machine and reports which stage failed.
+
+```mermaid
+flowchart LR
+    Client[whep-check] -->|POST SDP offer| Endpoint[WHEP endpoint]
+    Endpoint -->|201 + SDP answer, Location| Client
+    Client -->|STUN checks to server candidates| Media[Server UDP candidate]
+    Media -->|DTLS-SRTP media| Client
+    Client -->|DELETE Location on exit| Endpoint
+```
+
+The client is built with Go and Pion WebRTC. It offers receive-only H.264,
+other default video codecs, and Opus. It prints the answer's ice-lite mode,
+codecs, and candidates. It then follows ICE and DTLS state, logs the selected
+candidate pair, counts RTP packets, bitrate, and H.264 keyframes, and requests
+keyframes with PLI. On exit it deletes the WHEP resource. Exit codes separate
+signaling (`2`), ICE/DTLS (`3`), and missing media (`4`) from success (`0`).
+Optional playback forwards decrypted RTP to a local `ffplay` through a
+generated SDP file. Optional recording writes raw H.264 and Ogg/Opus files.
+
+The check sends network traffic, unlike log analysis. It runs only on an
+explicit request for a user-supplied URL and is bounded in duration. It never
+controls or reconfigures Nimble. Firewall and `whep_config.json` changes are
+proposals. Observe-mode tests keep their no-probe rule; the client's own tests
+use an in-process ice-lite WHEP server and never contact real endpoints. The
+workflow requires a client-side UDP check, with a STUN-derived server-reflexive
+candidate, before an ICE failure is attributed to the server.
 
 ## Maintenance
 
