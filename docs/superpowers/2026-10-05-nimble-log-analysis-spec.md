@@ -207,25 +207,41 @@ Suggested remediation does not authorize modifying Nimble or its configuration.
    has a bounded timeout (default 15 seconds). Repeat runs only on request or
    to distinguish hypotheses.
 4. Output carries UTC timestamps and reports the HTTP status, timing, ice-lite
-   mode, negotiated codecs, server candidates, ICE/DTLS states, selected
-   candidate pair, RTP packets, bitrate, and H.264 keyframes. Exit codes:
-   `0` media received, `1` usage, `2` signaling, `3` ICE/DTLS, `4` connected
-   without media. A private server candidate address produces a warning.
-5. `-play` forwards decrypted RTP to local ports and an SDP file for `ffplay`
-   or VLC, and requires a graphical session. `-record` writes raw H.264 and
-   Ogg/Opus files. `-stun` adds a server-reflexive candidate to verify that
-   outbound UDP leaves the client network.
-6. Interpretation separates signaling, transport, and media stages. Before
+   mode, negotiated codecs, server candidates, ICE/DTLS states, and selected
+   candidate pair. Exit codes: `0` media received, `1` usage, `2` signaling,
+   `3` ICE/DTLS, `4` connected without media. A private server candidate
+   address produces a warning.
+5. After media starts, the client prints the video format from the H.264
+   SPS/PPS and the audio format from the Opus TOC byte. It notes a mismatch
+   between the SDP `profile-level-id` and the SPS, warns when resolution and
+   frame rate exceed the signalled level, and reports format changes.
+6. Statistics are taken on arrival, before buffering, per interval and for the
+   session: bitrate, lost, late, and duplicate packets, NACKed sequence numbers
+   and PLIs sent, frames, keyframes counted once per frame, GOP, largest frame
+   gap, and maximum arrival delay. Gaps above 250 ms are logged and classified
+   as delayed delivery (RTP time advanced much less than wall time) or a source
+   pause. The final summary gives the RTP frame-step grid regularity and a
+   timing verdict. A keyframe is requested only until the first one arrives.
+7. `-play` and `-record` share a jitter buffer (`-buffer`, default 300 ms) and
+   write only complete frames as live Matroska. After an unrecoverable loss,
+   video resumes at the next keyframe and one PLI is sent. `-play` starts the
+   player with the stream on standard input, ends the check when the player
+   exits, and requires a graphical session; `-player ""` writes the stream to
+   stdout and logs to stderr. `-record` writes
+   `<dir>/whep-check-<UTC time>.mkv`. `-stun` adds a server-reflexive candidate
+   to verify that outbound UDP leaves the client network.
+8. Interpretation separates signaling, transport, and media stages. Before
    attributing an ICE failure to the server, check client-side UDP. Explain
    that a plain `GET` of a WHEP URL is not a WHEP request. Firewall and Nimble
    `whep_config.json` changes remain proposals for the user.
-7. Redact URL signatures and tokens in reports; pass bearer tokens through
+9. Redact URL signatures and tokens in reports; pass bearer tokens through
    `-token`. State what was not verified, such as visual quality without
    playback, other client networks, and missing server logs.
-8. The client's Go tests use an in-process ice-lite WHEP server with synthetic
-   RTP. They verify success with media and resource deletion, a signaling
-   failure, and an unreachable-candidate ICE failure without contacting real
-   endpoints.
+10. The client's Go tests use an in-process ice-lite WHEP server with synthetic
+    RTP. They verify success with media and resource deletion, a signaling
+    failure, and an unreachable-candidate ICE failure without contacting real
+    endpoints. An optional end-to-end test uses real H.264 and Opus made by a
+    local `ffmpeg` and is skipped when `ffmpeg` is not installed.
 
 ## Catalog and contributor maintenance
 
@@ -343,8 +359,14 @@ Suggested remediation does not authorize modifying Nimble or its configuration.
 - The `whep-check` skill passes the same frontmatter and symlink checks and
   links to `workflows/check-whep.md`. `AGENTS.md` routes WHEP checks there.
 - `go vet ./...` and `go test ./...` pass in `tools/whep-check` without network
-  access to real endpoints. The tests cover media receipt with `DELETE`,
-  signaling failure, and ICE timeout.
+  access to real endpoints. The tests cover media receipt with `DELETE` and a
+  decodable Matroska structure, signaling failure, ICE timeout, piping to a
+  player that exits, SPS/PPS/Opus parsing and level checks, loss, late and
+  duplicate accounting, keyframe and GOP counting, gap classification, the
+  jitter buffer, and skipping to a keyframe after loss. When `ffmpeg` is
+  installed, an end-to-end test sends real H.264 and Opus with reordering, an
+  unrecoverable loss, and a delivery stall, and ffmpeg decodes both the
+  recording and the live player stream without errors.
 - A log-analysis or test request does not run the WHEP client. A WHEP check
   request without a URL asks for one; a supplied URL is checked once and
   reported by stage with redacted secrets.

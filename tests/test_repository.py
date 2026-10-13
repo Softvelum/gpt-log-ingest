@@ -62,7 +62,7 @@ class RepositoryTests(unittest.TestCase):
             with self.subTest(skill=path.relative_to(ROOT)):
                 self.assertIn(workflow, set(local_links(path)))
         self.assertIn(workflow, set(local_links(ROOT / "AGENTS.md")))
-        for name in ("go.mod", "go.sum", "main.go", "main_test.go"):
+        for name in ("go.mod", "go.sum", "main.go", "main_test.go", "stats.go", "output.go"):
             with self.subTest(file=name):
                 self.assertTrue((ROOT / "tools/whep-check" / name).is_file())
         text = " ".join(workflow.read_text().lower().split())

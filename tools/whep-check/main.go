@@ -1,14 +1,14 @@
 // whep-check is a WHEP playback client for diagnosing WebRTC delivery.
 //
 // It performs the WHEP signaling exchange, reports the server answer
-// (ICE mode, candidates, codecs), follows ICE/DTLS progress, counts the
-// received RTP media and can optionally save or play the stream.
+// (ICE mode, candidates, codecs), follows ICE/DTLS progress, and analyzes the
+// received RTP media: format, loss, retransmissions, keyframes and frame
+// timing. It can also play or record the stream as live Matroska.
 package main
 
 import (
 	"bytes"
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -16,22 +16,17 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/pion/interceptor"
 	"github.com/pion/logging"
 	"github.com/pion/rtcp"
-	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
-	"github.com/pion/webrtc/v4/pkg/media/h264writer"
-	"github.com/pion/webrtc/v4/pkg/media/oggwriter"
 )
 
 // Exit codes.
@@ -48,11 +43,11 @@ type options struct {
 	token       string
 	duration    time.Duration
 	iceTimeout  time.Duration
+	interval    time.Duration
 	stun        string
 	play        bool
 	player      string
-	playVideo   int
-	playAudio   int
+	buffer      time.Duration
 	recordDir   string
 	verbose     bool
 	insecureTLS bool
@@ -61,21 +56,16 @@ type options struct {
 	includeLoopback bool
 }
 
-type trackStats struct {
-	kind      string
-	codec     string
-	ssrc      uint32
-	packets   atomic.Uint64
-	bytes     atomic.Uint64
-	keyframes atomic.Uint64
-	first     atomic.Int64 // unix nanos of the first packet
-	last      atomic.Int64 // unix nanos of the latest packet
-}
-
-var start = time.Now()
+var (
+	start            = time.Now()
+	logOut io.Writer = os.Stdout
+	logMu  sync.Mutex
+)
 
 func logf(format string, args ...any) {
-	fmt.Printf("[%s +%6.2fs] %s\n", time.Now().UTC().Format("15:04:05.000"),
+	logMu.Lock()
+	defer logMu.Unlock()
+	fmt.Fprintf(logOut, "[%s +%6.2fs] %s\n", time.Now().UTC().Format("15:04:05.000"),
 		time.Since(start).Seconds(), fmt.Sprintf(format, args...))
 }
 
@@ -88,12 +78,12 @@ func run() int {
 	flag.StringVar(&o.token, "token", "", "optional Bearer token for the WHEP endpoint")
 	flag.DurationVar(&o.duration, "duration", 20*time.Second, "how long to receive media after connecting (0 = until Ctrl+C; default with -play)")
 	flag.DurationVar(&o.iceTimeout, "ice-timeout", 15*time.Second, "fail if ICE/DTLS is not connected within this time")
+	flag.DurationVar(&o.interval, "interval", 5*time.Second, "statistics interval")
 	flag.StringVar(&o.stun, "stun", "", "optional STUN server, e.g. stun:stun.l.google.com:19302 (not needed for ice-lite servers)")
-	flag.BoolVar(&o.play, "play", false, "forward media to a local player (ffplay) via RTP + SDP file")
-	flag.StringVar(&o.player, "player", "ffplay", "player executable used with -play; empty = only write the SDP file")
-	flag.IntVar(&o.playVideo, "play-video-port", 5004, "local UDP port for forwarded video RTP")
-	flag.IntVar(&o.playAudio, "play-audio-port", 5006, "local UDP port for forwarded audio RTP")
-	flag.StringVar(&o.recordDir, "record", "", "directory to save video.h264 and audio.ogg")
+	flag.BoolVar(&o.play, "play", false, "play the stream: live Matroska on the player's standard input")
+	flag.StringVar(&o.player, "player", "ffplay", "player for -play (ffplay, mpv or vlc); empty = write the stream to stdout and logs to stderr")
+	flag.DurationVar(&o.buffer, "buffer", 300*time.Millisecond, "jitter buffer for -play/-record: how long to wait for reordered or retransmitted packets")
+	flag.StringVar(&o.recordDir, "record", "", "save the stream as <dir>/whep-check-<UTC time>.mkv")
 	flag.BoolVar(&o.verbose, "v", false, "verbose ICE/DTLS logging from the WebRTC stack")
 	flag.BoolVar(&o.insecureTLS, "k", false, "skip TLS certificate verification for the WHEP HTTP requests")
 	flag.Usage = func() {
@@ -102,7 +92,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "\nExit codes: 0 media received, 1 usage, 2 signaling failed, 3 ICE/DTLS failed, 4 connected but no media\n")
 	}
 	flag.Parse()
-	if flag.NArg() != 1 {
+	if flag.NArg() != 1 || o.interval <= 0 || o.buffer < 0 {
 		flag.Usage()
 		return exitUsage
 	}
@@ -110,7 +100,11 @@ func run() int {
 	durationSet := false
 	flag.Visit(func(f *flag.Flag) { durationSet = durationSet || f.Name == "duration" })
 	if o.play && !durationSet {
-		o.duration = 0 // watch until Ctrl+C
+		o.duration = 0 // watch until Ctrl+C or until the player is closed
+	}
+	if o.play && o.player == "" {
+		logOut = os.Stderr // stdout carries the media stream
+		signal.Ignore(syscall.SIGPIPE)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -120,7 +114,8 @@ func run() int {
 }
 
 func check(ctx context.Context, o options) int {
-	pc, err := newPeerConnection(o)
+	counter := newRTCPCounter()
+	pc, err := newPeerConnection(o, counter)
 	if err != nil {
 		logf("ERROR: create peer connection: %v", err)
 		return exitUsage
@@ -163,59 +158,74 @@ func check(ctx context.Context, o options) int {
 		}
 	})
 
-	// Media sinks.
+	pli := func(ssrc uint32) {
+		_ = pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: ssrc}})
+	}
+
+	// Optional media output (player and/or file).
+	var out *mediaOut
+	if o.play || o.recordDir != "" {
+		out = newMediaOut(o.buffer, pli)
+		defer out.close()
+		if o.recordDir != "" {
+			if err := out.addRecordFile(o.recordDir); err != nil {
+				logf("ERROR: %v", err)
+				return exitUsage
+			}
+		}
+		if o.play {
+			if o.player == "" {
+				out.addStdout()
+			} else if err := out.startPlayer(ctx, o.player); err != nil {
+				logf("ERROR: cannot start %s: %v (install it, pass -player, or use -player \"\" to pipe the stream)", o.player, err)
+				return exitUsage
+			}
+		}
+	}
+	var playerDone <-chan struct{}
+	if out != nil && out.cmd != nil {
+		playerDone = out.playerDone
+	}
+
 	var (
 		statsMu sync.Mutex
 		stats   []*trackStats
 	)
-	var fwd atomic.Pointer[forwarder]
-	var rec *recorder
-	if o.recordDir != "" {
-		if rec, err = newRecorder(o.recordDir); err != nil {
-			logf("ERROR: %v", err)
-			return exitUsage
-		}
-		defer rec.close()
-	}
-
 	pc.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 		c := track.Codec()
-		st := &trackStats{kind: track.Kind().String(), codec: c.MimeType, ssrc: uint32(track.SSRC())}
+		kind := track.Kind().String()
+		st := newTrackStats(kind, c.MimeType, uint32(track.SSRC()), c.ClockRate, c.Channels, c.SDPFmtpLine, counter)
 		statsMu.Lock()
 		stats = append(stats, st)
 		statsMu.Unlock()
-		logf("Track: %s %s pt=%d clock=%d ssrc=%d fmtp=%q", st.kind, c.MimeType, c.PayloadType, c.ClockRate, st.ssrc, c.SDPFmtpLine)
+		logf("Track: %s %s pt=%d clock=%d channels=%d ssrc=%d", kind, c.MimeType, c.PayloadType, c.ClockRate, c.Channels, st.ssrc)
+		var fb []string
+		for _, f := range c.RTCPFeedback {
+			fb = append(fb, strings.TrimSpace(f.Type+" "+f.Parameter))
+		}
+		if len(fb) > 0 {
+			logf("  RTCP feedback: %s", strings.Join(fb, ", "))
+		}
 
-		isVideo := track.Kind() == webrtc.RTPCodecTypeVideo
-		isH264 := strings.EqualFold(c.MimeType, webrtc.MimeTypeH264)
-		if isVideo {
-			go requestKeyframes(ctx, pc, st.ssrc)
+		var ot *outTrack
+		if out != nil {
+			ot = out.addTrack(kind, c.MimeType, st.ssrc, c.ClockRate, c.Channels)
+		}
+		if track.Kind() == webrtc.RTPCodecTypeVideo {
+			go requestFirstKeyframe(ctx, st, pli)
 		}
 		for {
 			pkt, _, err := track.ReadRTP()
 			if err != nil {
-				if !errors.Is(err, io.EOF) {
-					logf("%s track read ended: %v", st.kind, err)
+				if err != io.EOF {
+					logf("%s track read ended: %v", kind, err)
 				}
 				return
 			}
-			now := time.Now().UnixNano()
-			if st.packets.Add(1) == 1 {
-				st.first.Store(now)
-				logf("First %s RTP packet received (seq=%d ts=%d)", st.kind, pkt.SequenceNumber, pkt.Timestamp)
-			}
-			st.last.Store(now)
-			st.bytes.Add(uint64(len(pkt.Payload)))
-			if isH264 && h264Keyframe(pkt.Payload) {
-				if st.keyframes.Add(1) == 1 {
-					logf("First H.264 keyframe (IDR/SPS) received")
-				}
-			}
-			if f := fwd.Load(); f != nil {
-				f.write(isVideo, pkt)
-			}
-			if rec != nil {
-				rec.write(isVideo, c.MimeType, pkt)
+			now := time.Now()
+			st.onPacket(pkt, now)
+			if ot != nil {
+				ot.push(pkt, now)
 			}
 		}
 	})
@@ -249,20 +259,13 @@ func check(ctx context.Context, o options) int {
 		logf("WARNING: no Location header in the answer; session cannot be deleted explicitly")
 	}
 	describeAnswer(answerSDP)
+	if out != nil {
+		out.expect(answerSends(answerSDP, "video"), answerSends(answerSDP, "audio"))
+	}
 
 	if err := pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answerSDP}); err != nil {
 		logf("ERROR: set remote description: %v", err)
 		return exitSignaling
-	}
-
-	if o.play {
-		f, err := startPlayback(ctx, o, pc)
-		if err != nil {
-			logf("ERROR: playback setup: %v", err)
-			return exitUsage
-		}
-		fwd.Store(f)
-		defer f.close()
 	}
 
 	// Wait for ICE + DTLS.
@@ -292,7 +295,7 @@ func check(ctx context.Context, o options) int {
 	} else {
 		logf("Receiving media until Ctrl+C")
 	}
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(o.interval)
 	defer ticker.Stop()
 	snapshot := func() []*trackStats {
 		statsMu.Lock()
@@ -302,10 +305,22 @@ func check(ctx context.Context, o options) int {
 loop:
 	for {
 		select {
-		case <-ticker.C:
-			printStats(snapshot(), false)
+		case now := <-ticker.C:
+			all := snapshot()
+			if len(all) == 0 {
+				logf("Stats: no tracks yet")
+			}
+			for _, st := range all {
+				logf("%s", st.intervalLine(now))
+			}
+			if out != nil {
+				logf("%s", out.statsLine())
+			}
 		case reason := <-failed:
 			logf("Connection lost: %s", reason)
+			break loop
+		case <-playerDone:
+			logf("Player closed")
 			break loop
 		case <-deadline:
 			break loop
@@ -315,10 +330,17 @@ loop:
 	}
 
 	all := snapshot()
-	printStats(all, true)
 	var total uint64
 	for _, st := range all {
-		total += st.packets.Load()
+		for _, l := range st.finalLines() {
+			logf("%s", l)
+		}
+		st.mu.Lock()
+		total += st.packets
+		st.mu.Unlock()
+	}
+	if out != nil {
+		logf("%s", out.statsLine())
 	}
 	if total == 0 {
 		logf("RESULT: connected, but no RTP media received")
@@ -328,17 +350,39 @@ loop:
 	return exitOK
 }
 
-func newPeerConnection(o options) (*webrtc.PeerConnection, error) {
+// requestFirstKeyframe asks for a keyframe until the first one arrives, so
+// the format is known quickly. It stops afterwards to keep the server's own
+// keyframe interval measurable.
+func requestFirstKeyframe(ctx context.Context, st *trackStats, pli func(uint32)) {
+	for i := 0; i < 5; i++ {
+		st.mu.Lock()
+		have := st.haveKey
+		st.mu.Unlock()
+		if have {
+			return
+		}
+		pli(st.ssrc)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+func newPeerConnection(o options, counter *rtcpCounter) (*webrtc.PeerConnection, error) {
 	m := &webrtc.MediaEngine{}
 	if err := m.RegisterDefaultCodecs(); err != nil {
 		return nil, err
 	}
 	ir := &interceptor.Registry{}
+	ir.Add(counter) // before the NACK generator, so its requests are counted
 	if err := webrtc.RegisterDefaultInterceptors(m, ir); err != nil {
 		return nil, err
 	}
 	se := webrtc.SettingEngine{}
 	lf := logging.NewDefaultLoggerFactory()
+	lf.Writer = logWriter{}
 	if o.verbose {
 		lf.ScopeLevels["ice"] = logging.LogLevelDebug
 		lf.ScopeLevels["dtls"] = logging.LogLevelDebug
@@ -356,6 +400,15 @@ func newPeerConnection(o options) (*webrtc.PeerConnection, error) {
 		cfg.ICEServers = []webrtc.ICEServer{{URLs: []string{o.stun}}}
 	}
 	return api.NewPeerConnection(cfg)
+}
+
+// logWriter sends Pion's own log output to the current log destination.
+type logWriter struct{}
+
+func (logWriter) Write(p []byte) (int, error) {
+	logMu.Lock()
+	defer logMu.Unlock()
+	return logOut.Write(p)
 }
 
 func httpClient(o options) *http.Client {
@@ -464,6 +517,27 @@ func describeAnswer(sdp string) {
 	}
 }
 
+// answerSends reports whether the SDP answer has an active m-line of this
+// kind in which the server sends media.
+func answerSends(sdp, kind string) bool {
+	in, sends := false, false
+	for _, l := range sdpLines(sdp) {
+		if strings.HasPrefix(l, "m=") {
+			if in && sends {
+				return true
+			}
+			f := strings.Fields(strings.TrimPrefix(l, "m="))
+			in = len(f) > 1 && f[0] == kind && f[1] != "0"
+			sends = true // sendrecv is the default direction
+			continue
+		}
+		if in && (l == "a=recvonly" || l == "a=inactive") {
+			sends = false
+		}
+	}
+	return in && sends
+}
+
 // candidateIP returns the connection address of an a=candidate line.
 func candidateIP(line string) net.IP {
 	f := strings.Fields(strings.TrimPrefix(line, "a="))
@@ -512,219 +586,5 @@ func logSelectedPair(pc *webrtc.PeerConnection) {
 				pair.Remote.Typ, pair.Remote.Address, pair.Remote.Port)
 			return
 		}
-	}
-}
-
-func requestKeyframes(ctx context.Context, pc *webrtc.PeerConnection, ssrc uint32) {
-	t := time.NewTicker(2 * time.Second)
-	defer t.Stop()
-	for {
-		if err := pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: ssrc}}); err != nil {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
-}
-
-// h264Keyframe reports whether an H.264 RTP payload carries an IDR slice or SPS.
-func h264Keyframe(p []byte) bool {
-	if len(p) < 2 {
-		return false
-	}
-	isKey := func(t byte) bool { return t == 5 || t == 7 }
-	switch t := p[0] & 0x1f; t {
-	case 24: // STAP-A
-		for i := 1; i+2 < len(p); {
-			size := int(p[i])<<8 | int(p[i+1])
-			if i+2 >= len(p) || size == 0 {
-				break
-			}
-			if isKey(p[i+2] & 0x1f) {
-				return true
-			}
-			i += 2 + size
-		}
-		return false
-	case 28: // FU-A
-		return p[1]&0x80 != 0 && isKey(p[1]&0x1f)
-	default:
-		return isKey(t)
-	}
-}
-
-func printStats(all []*trackStats, final bool) {
-	label := "Stats"
-	if final {
-		label = "Final stats"
-	}
-	if len(all) == 0 {
-		logf("%s: no tracks yet", label)
-		return
-	}
-	for _, st := range all {
-		pk, by := st.packets.Load(), st.bytes.Load()
-		var kbps float64
-		if f, l := st.first.Load(), st.last.Load(); pk > 1 && l > f {
-			kbps = float64(by*8) / (float64(l-f) / 1e9) / 1000
-		}
-		extra := ""
-		if st.kind == "video" {
-			extra = fmt.Sprintf(" keyframes=%d", st.keyframes.Load())
-		}
-		idle := ""
-		if l := st.last.Load(); l > 0 {
-			idle = fmt.Sprintf(" last=%.1fs ago", time.Since(time.Unix(0, l)).Seconds())
-		}
-		logf("%s: %s %s packets=%d payload=%dB avg=%.0fkbps%s%s", label, st.kind, st.codec, pk, by, kbps, extra, idle)
-	}
-}
-
-// forwarder relays decrypted RTP to local UDP ports for an external player.
-type forwarder struct {
-	video, audio net.Conn
-	cmd          *exec.Cmd
-}
-
-func startPlayback(ctx context.Context, o options, pc *webrtc.PeerConnection) (*forwarder, error) {
-	var b strings.Builder
-	b.WriteString("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=whep-check\r\nc=IN IP4 127.0.0.1\r\nt=0 0\r\n")
-	f := &forwarder{}
-	for _, t := range pc.GetTransceivers() {
-		codecs := t.Receiver().GetParameters().Codecs
-		if len(codecs) == 0 {
-			continue
-		}
-		c := codecs[0]
-		kind, port := "audio", o.playAudio
-		if t.Kind() == webrtc.RTPCodecTypeVideo {
-			kind, port = "video", o.playVideo
-		}
-		conn, err := net.Dial("udp", fmt.Sprintf("127.0.0.1:%d", port))
-		if err != nil {
-			return nil, err
-		}
-		if kind == "video" {
-			f.video = conn
-		} else {
-			f.audio = conn
-		}
-		enc := strings.TrimPrefix(c.MimeType, kind+"/")
-		fmt.Fprintf(&b, "m=%s %d RTP/AVP %d\r\na=rtpmap:%d %s/%d", kind, port, c.PayloadType, c.PayloadType, enc, c.ClockRate)
-		if c.Channels > 0 {
-			fmt.Fprintf(&b, "/%d", c.Channels)
-		}
-		b.WriteString("\r\n")
-		if c.SDPFmtpLine != "" {
-			fmt.Fprintf(&b, "a=fmtp:%d %s\r\n", c.PayloadType, c.SDPFmtpLine)
-		}
-	}
-	sdpPath := filepath.Join(os.TempDir(), "whep-check.sdp")
-	if err := os.WriteFile(sdpPath, []byte(b.String()), 0o644); err != nil {
-		return nil, err
-	}
-	logf("Playback SDP written to %s", sdpPath)
-	args := []string{"-hide_banner", "-loglevel", "warning", "-protocol_whitelist", "file,udp,rtp",
-		"-fflags", "nobuffer", "-flags", "low_delay", "-window_title", "whep-check", "-i", sdpPath}
-	if o.player == "" {
-		logf("Open it with: ffplay %s   (or VLC: vlc %s)", strings.Join(args, " "), sdpPath)
-		return f, nil
-	}
-	f.cmd = exec.CommandContext(ctx, o.player, args...)
-	f.cmd.Stdout, f.cmd.Stderr = os.Stdout, os.Stderr
-	if err := f.cmd.Start(); err != nil {
-		logf("WARNING: cannot start %s: %v", o.player, err)
-		logf("Open it manually: ffplay %s", strings.Join(args, " "))
-		f.cmd = nil
-		return f, nil
-	}
-	logf("Started %s (pid %d)", o.player, f.cmd.Process.Pid)
-	return f, nil
-}
-
-func (f *forwarder) write(video bool, pkt *rtp.Packet) {
-	conn := f.audio
-	if video {
-		conn = f.video
-	}
-	if conn == nil {
-		return
-	}
-	if buf, err := pkt.Marshal(); err == nil {
-		_, _ = conn.Write(buf) // the player may not be listening yet
-	}
-}
-
-func (f *forwarder) close() {
-	for _, c := range []net.Conn{f.video, f.audio} {
-		if c != nil {
-			c.Close()
-		}
-	}
-	if f.cmd != nil && f.cmd.Process != nil {
-		_ = f.cmd.Process.Kill()
-		_ = f.cmd.Wait()
-	}
-}
-
-// recorder saves received media to files.
-type recorder struct {
-	mu    sync.Mutex
-	video *h264writer.H264Writer
-	audio *oggwriter.OggWriter
-	dir   string
-}
-
-func newRecorder(dir string) (*recorder, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("create record directory: %w", err)
-	}
-	return &recorder{dir: dir}, nil
-}
-
-func (r *recorder) write(video bool, mime string, pkt *rtp.Packet) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	var err error
-	switch {
-	case video && strings.EqualFold(mime, webrtc.MimeTypeH264):
-		if r.video == nil {
-			p := filepath.Join(r.dir, "video.h264")
-			if r.video, err = h264writer.New(p); err != nil {
-				logf("ERROR: %v", err)
-				return
-			}
-			logf("Recording video to %s", p)
-		}
-		err = r.video.WriteRTP(pkt)
-	case !video && strings.EqualFold(mime, webrtc.MimeTypeOpus):
-		if r.audio == nil {
-			p := filepath.Join(r.dir, "audio.ogg")
-			if r.audio, err = oggwriter.New(p, 48000, 2); err != nil {
-				logf("ERROR: %v", err)
-				return
-			}
-			logf("Recording audio to %s", p)
-		}
-		err = r.audio.WriteRTP(pkt)
-	default:
-		return
-	}
-	if err != nil {
-		logf("record write error: %v", err)
-	}
-}
-
-func (r *recorder) close() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.video != nil {
-		r.video.Close()
-	}
-	if r.audio != nil {
-		r.audio.Close()
 	}
 }

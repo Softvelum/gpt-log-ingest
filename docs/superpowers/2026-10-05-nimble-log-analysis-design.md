@@ -194,12 +194,44 @@ flowchart LR
 
 The client is built with Go and Pion WebRTC. It offers receive-only H.264,
 other default video codecs, and Opus. It prints the answer's ice-lite mode,
-codecs, and candidates. It then follows ICE and DTLS state, logs the selected
-candidate pair, counts RTP packets, bitrate, and H.264 keyframes, and requests
-keyframes with PLI. On exit it deletes the WHEP resource. Exit codes separate
-signaling (`2`), ICE/DTLS (`3`), and missing media (`4`) from success (`0`).
-Optional playback forwards decrypted RTP to a local `ffplay` through a
-generated SDP file. Optional recording writes raw H.264 and Ogg/Opus files.
+codecs, and candidates. It then follows ICE and DTLS state and logs the
+selected candidate pair. On exit it deletes the WHEP resource. Exit codes
+separate signaling (`2`), ICE/DTLS (`3`), and missing media (`4`) from success
+(`0`).
+
+Media analysis runs on packets as they arrive, before any buffering, so it
+describes what the network delivered:
+
+- Format: H.264 SPS/PPS (profile, level, resolution, VUI frame rate and colour,
+  reordering) and the Opus table-of-contents byte, compared with the SDP
+  `profile-level-id` and the H.264 level limits.
+- Transport: lost, late (reordered or retransmitted), and duplicate packets per
+  sequence number, plus NACK and PLI requests counted by an RTCP interceptor
+  placed before Pion's NACK generator.
+- Frames: frames per second, keyframes counted once per frame, and the GOP. A
+  keyframe is requested with PLI only until the first one arrives.
+- Timing: gaps between frame arrivals are compared with the RTP time that
+  passed. Arrival gaps with continuing timestamps mean delayed delivery; gaps
+  in both mean the source sent nothing. RTP regularity is measured against the
+  dominant frame step, so lost frames do not count as irregular.
+
+```mermaid
+flowchart LR
+    RTP[RTP from the network] --> Stats[Arrival statistics]
+    RTP --> JB[Jitter buffer: reorder, wait for NACK retransmissions]
+    JB --> Frames[Complete frames only; after loss skip to keyframe + PLI]
+    Frames --> MKV[Live Matroska]
+    MKV --> Player[ffplay / mpv / VLC stdin]
+    MKV --> File[Recording .mkv]
+```
+
+Optional playback and recording share one path: a jitter buffer ordered by
+sequence number gives up a missing packet once the packet after it has waited
+for the buffer delay. Complete frames are muxed into live Matroska with
+timestamps anchored at each track's first frame arrival. The stream header is
+written at the first video keyframe, after the expected audio track starts or
+a short timeout. A pipe replaces the former local UDP/SDP forwarding, which
+could drop packets on bursts and passed reordered packets to the player.
 
 The check sends network traffic, unlike log analysis. It runs only on an
 explicit request for a user-supplied URL and is bounded in duration. It never

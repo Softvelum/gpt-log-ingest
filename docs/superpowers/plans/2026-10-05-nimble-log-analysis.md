@@ -169,3 +169,9 @@ analysis and workspace tests.
 - [x] Update the README, design, specification, test workflow, behavior
   scenarios, and repository tests.
 - [x] Run Go vet/tests, the Python suite, the map check, and diff checks.
+- [x] Report media format (SPS/PPS, Opus TOC) with SDP and level checks.
+- [x] Count lost, late, and duplicate packets, NACKs and PLIs, keyframes per
+  frame and GOP; classify delivery gaps against RTP time.
+- [x] Replace UDP/SDP forwarding with a jitter buffer, complete-frame assembly,
+  and live Matroska for `-play` (player stdin) and `-record` (.mkv).
+- [x] Add unit tests and an optional ffmpeg end-to-end test with impairments.

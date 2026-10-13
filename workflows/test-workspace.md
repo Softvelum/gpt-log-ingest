@@ -22,6 +22,8 @@ structural properties, not that an agent made a correct diagnosis.
 
 When the change touches `tools/whep-check`, also run `go vet ./...` and
 `go test ./...` in that directory. These tests use an in-process WHEP server.
+With `ffmpeg` in `PATH`, an end-to-end test also decodes real H.264 and Opus
+sent with impairments; without it that test is skipped, so report it as not run.
 Never run the WHEP client against a real endpoint as part of workspace or
 commit tests; [WHEP checks](check-whep.md) are separate, explicit requests.
 
