@@ -292,12 +292,18 @@ func (o *mediaOut) addStdout() {
 	logf("Writing the live Matroska stream to stdout (logs go to stderr)")
 }
 
+// ffInputArgs are the ffplay/ffmpeg input options for the live stream. They
+// must not include "-fflags nobuffer": it discards the packets read while
+// probing the format, which include the first keyframe, so decoding would
+// start on frames whose references are missing.
+var ffInputArgs = []string{"-flags", "low_delay", "-f", "matroska", "-i", "pipe:0"}
+
 // startPlayer runs the player with the live stream on its standard input.
 func (o *mediaOut) startPlayer(ctx context.Context, player string) error {
 	args := []string{"-"}
 	if strings.HasPrefix(strings.ToLower(filepath.Base(player)), "ffplay") {
-		args = []string{"-hide_banner", "-loglevel", "warning", "-fflags", "nobuffer", "-flags", "low_delay",
-			"-framedrop", "-autoexit", "-window_title", "whep-check", "-f", "matroska", "-i", "pipe:0"}
+		args = append([]string{"-hide_banner", "-loglevel", "warning", "-framedrop", "-autoexit",
+			"-window_title", "whep-check"}, ffInputArgs...)
 	}
 	cmd := exec.CommandContext(ctx, player, args...)
 	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr

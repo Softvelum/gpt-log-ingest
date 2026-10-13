@@ -19,9 +19,10 @@ import (
 	"github.com/pion/webrtc/v4/pkg/media/oggreader"
 )
 
-// TestEndToEndWithRealMedia sends real H.264 and Opus (made by ffmpeg) with
-// reordering, one unrecoverable loss and a delivery stall, then checks the
-// statistics and that ffmpeg decodes the recording without errors.
+// TestEndToEndWithRealMedia sends real H.264 and Opus (made by ffmpeg) with a
+// resolution switch, reordering, one unrecoverable loss and a delivery stall,
+// then checks the statistics and that ffmpeg decodes the recording and the
+// live player stream without errors.
 // It is skipped when ffmpeg is not installed.
 func TestEndToEndWithRealMedia(t *testing.T) {
 	ffmpeg, err := exec.LookPath("ffmpeg")
@@ -33,7 +34,11 @@ func TestEndToEndWithRealMedia(t *testing.T) {
 	}
 	dir := t.TempDir()
 	vfile, afile := filepath.Join(dir, "v.h264"), filepath.Join(dir, "a.ogg")
+	low := filepath.Join(dir, "low.h264")
 	for _, args := range [][]string{
+		// A short low-resolution start, as when WebRTC ABR begins on a lower rendition.
+		{"-f", "lavfi", "-i", "testsrc2=size=320x240:rate=50", "-t", "0.4", "-c:v", "libx264", "-profile:v", "baseline",
+			"-level", "2.2", "-bf", "0", "-g", "25", "-pix_fmt", "yuv420p", "-f", "h264", low},
 		{"-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=50", "-t", "5", "-c:v", "libx264", "-profile:v", "baseline",
 			"-level", "3.2", "-bf", "0", "-g", "25", "-pix_fmt", "yuv420p", "-f", "h264", vfile},
 		{"-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "5", "-ac", "2", "-c:a", "libopus",
@@ -44,7 +49,7 @@ func TestEndToEndWithRealMedia(t *testing.T) {
 			t.Fatalf("ffmpeg: %v\n%s", err, out)
 		}
 	}
-	frames := readAccessUnits(t, vfile)
+	frames := append(readAccessUnits(t, low), readAccessUnits(t, vfile)...)
 	opus := readOpusPackets(t, afile)
 
 	logs := captureLog(t)
@@ -56,7 +61,9 @@ func TestEndToEndWithRealMedia(t *testing.T) {
 	// The "player" decodes the live stream from its standard input with ffmpeg.
 	playerErrs := filepath.Join(dir, "player-errors.txt")
 	player := filepath.Join(dir, "player.sh")
-	script := "#!/bin/sh\nexec '" + ffmpeg + "' -hide_banner -v error -f matroska -i pipe:0 -f null - 2> '" + playerErrs + "'\n"
+	// It uses the same input options as ffplay gets from -play.
+	script := "#!/bin/sh\nexec '" + ffmpeg + "' -hide_banner -v error " + strings.Join(ffInputArgs, " ") +
+		" -f null - 2> '" + playerErrs + "'\n"
 	if err := os.WriteFile(player, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +76,8 @@ func TestEndToEndWithRealMedia(t *testing.T) {
 	}
 	out := logText(logs)
 	for _, want := range []string{
-		"Video format: H.264 Constrained Baseline, Level 3.2, 1280x720",
+		"Video format: H.264 Constrained Baseline, Level 2.2, 320x240",
+		"Video format changed (320x240 -> 1280x720): H.264 Constrained Baseline, Level 3.2, 1280x720",
 		"Audio format: Opus 48000 Hz, 2 channel(s) negotiated; stream: CELT mode, fullband",
 		"frames were delayed in delivery",
 		"lost 1 (",
@@ -99,7 +107,8 @@ func TestEndToEndWithRealMedia(t *testing.T) {
 	}
 	probe := exec.Command(ffmpeg, "-hide_banner", "-i", files[0])
 	info, _ := probe.CombinedOutput()
-	if !strings.Contains(string(info), "h264") || !strings.Contains(string(info), "1280x720") || !strings.Contains(string(info), "opus") {
+	// The header carries the first keyframe's format (320x240); the switch to 720p is in-band.
+	if !strings.Contains(string(info), "h264") || !strings.Contains(string(info), "opus") {
 		t.Errorf("unexpected recording streams:\n%s", info)
 	}
 }

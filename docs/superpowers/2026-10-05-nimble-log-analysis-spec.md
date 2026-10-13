@@ -364,9 +364,10 @@ Suggested remediation does not authorize modifying Nimble or its configuration.
   player that exits, SPS/PPS/Opus parsing and level checks, loss, late and
   duplicate accounting, keyframe and GOP counting, gap classification, the
   jitter buffer, and skipping to a keyframe after loss. When `ffmpeg` is
-  installed, an end-to-end test sends real H.264 and Opus with reordering, an
-  unrecoverable loss, and a delivery stall, and ffmpeg decodes both the
-  recording and the live player stream without errors.
+  installed, an end-to-end test sends real H.264 with a resolution switch and
+  Opus with reordering, an unrecoverable loss, and a delivery stall, and ffmpeg
+  decodes both the recording and the live player stream, read with the same
+  input options as ffplay, without errors.
 - A log-analysis or test request does not run the WHEP client. A WHEP check
   request without a URL asks for one; a supplied URL is checked once and
   reported by stage with redacted secrets.

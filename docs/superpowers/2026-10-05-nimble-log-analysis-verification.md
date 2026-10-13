@@ -251,9 +251,10 @@ clients. Real-endpoint use is an explicit user task outside these tests.
 - The recording contained H.264 and Opus tracks starting with a keyframe, and a
   player that exited ended the check with exit code `0`.
 
-The end-to-end test ran with a local ffmpeg 7.0.2 static build. Real 1280x720
-50 fps H.264 and Opus were sent with one reordered pair, one packet that was
-never retransmitted, and a 600 ms delivery stall followed by a burst. The
+The end-to-end test ran with a local ffmpeg 7.0.2 static build. Real H.264
+starting at 320x240 and switching to 1280x720 50 fps, as WebRTC ABR does, and
+Opus were sent with one reordered pair, one packet that was never
+retransmitted, and a 600 ms delivery stall followed by a burst. The
 client reported one lost packet, its NACKs, the gap as delayed delivery, and a
 regular RTP frame grid. ffmpeg decoded both the recording and the live stream
 piped to the player without any error messages. An earlier run of this test
@@ -267,4 +268,12 @@ the recorded video frames without errors. The run exercised format-change
 reporting, the SDP/SPS profile comparison, and gap classification on live
 data.
 Cross-compilation succeeded for Linux, Windows, and macOS (amd64 and arm64).
-Playback in a real `ffplay` window was not exercised in this environment.
+
+The user then played a real endpoint with `-play` in an `ffplay` window on a
+Linux desktop. Playback ran for several minutes without decoder errors after
+the start, but the first second showed reference errors. The cause was
+`-fflags nobuffer` in the ffplay options: it discards the packets read while
+probing the format, including the first keyframe, and the probe reads further
+when the stream switches resolution after start. The option was removed; the
+player and the end-to-end test now share the input options, and the test,
+which now includes the resolution switch, fails when the option is restored.
