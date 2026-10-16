@@ -1,0 +1,6 @@
+[
+  {"id": "t1", "tags": ["TEST"], "protocol": "udp", "ip": "233.252.0.10", "port": 1234, "cam_alias": "CHANNEL_A", "description": "CHANNEL_A", "mip": "127.0.0.1"},
+  {"id": "t2", "tags": ["TEST"], "protocol": "udp", "ip": "233.252.0.11", "port": 1234, "cam_alias": "CHANNEL_B", "description": "CHANNEL_B", "mip": "127.0.0.1"},
+  {"id": "h1", "tags": ["TEST"], "protocol": "hls", "cam_alias": "PULL_A", "description": "PULL_A", "url": "https://hls-a.example/live/index.m3u8"},
+  {"id": "h2", "tags": ["TEST"], "protocol": "hls", "cam_alias": "PULL_B", "description": "PULL_B", "url": "https://hls-b.example/live/index.m3u8"}
+]

@@ -1,0 +1,46 @@
+{
+  "blocked_resolver": {
+    "args": ["--dns", "dns.txt", "--strace", "strace.txt", "--nimble-log", "nimble.log"],
+    "verdict": "confirmed",
+    "affected_streams": ["CHANNEL_A"],
+    "reader": "mpeg2tscamera3",
+    "blocked": ["mpeg2tscamera0", "mpeg2tscamera1", "mpeg2tscamera3"],
+    "bad_servers": ["192.0.2.53"],
+    "pull_hosts": {"mpeg2tscamera0": ["hls-a.example"], "mpeg2tscamera1": ["hls-b.example"], "mpeg2tscamera3": ["hls-c.example"]},
+    "period_s": 10
+  },
+  "blocked_no_dns_evidence": {
+    "args": [],
+    "verdict": "probable",
+    "affected_streams": ["CHANNEL_A"],
+    "reader": "mpeg2tscamera3",
+    "blocked": ["mpeg2tscamera0", "mpeg2tscamera1", "mpeg2tscamera3"],
+    "period_s": 10
+  },
+  "blocked_seconds_only": {
+    "args": [],
+    "verdict": "confirmed",
+    "affected_streams": ["CHANNEL_A"],
+    "reader": "mpeg2tscamera3",
+    "blocked": ["mpeg2tscamera0", "mpeg2tscamera1", "mpeg2tscamera3"],
+    "source": "seconds",
+    "period_s": 10
+  },
+  "slow_reader": {
+    "args": [],
+    "verdict": "not-matched",
+    "affected_streams": [],
+    "blocked": []
+  },
+  "upstream_loss": {
+    "args": [],
+    "verdict": "not-matched",
+    "affected_streams": [],
+    "reason_contains": "look upstream first"
+  },
+  "clean": {
+    "args": [],
+    "verdict": "no-drops",
+    "affected_streams": []
+  }
+}

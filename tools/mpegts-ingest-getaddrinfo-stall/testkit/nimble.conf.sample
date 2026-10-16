@@ -1,0 +1,6 @@
+# synthetic nimble.conf for the lab test; nimdiag must mask the credential-like values
+worker_threads = 4
+logging = info
+panel_uuid = 00000000-0000-4000-8000-000000000000
+management_password = synthetic-not-a-secret
+max_cache_size = 64

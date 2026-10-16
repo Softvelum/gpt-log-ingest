@@ -29,6 +29,7 @@ network, or firewall changes instead of applying them.
 | Request | Workflow | Boundary |
 |---|---|---|
 | Check WebRTC WHEP playback from an endpoint URL, or explain why a WHEP player does not start | [workflows/check-whep.md](workflows/check-whep.md) | Opens a real viewer session; only for a user-supplied URL |
+| Explain MPEG-TS inputs that lose most of their bitrate or drop out periodically while the source is fine, check a nimdiag archive, or confirm an ingest thread blocked in DNS resolution | [workflows/mpegts-ingest-getaddrinfo-stall.md](workflows/mpegts-ingest-getaddrinfo-stall.md) | Analyzing supplied files is read-only; collecting on a Nimble host (nimdiag, DNS evidence, strace) only on request |
 
 For repository editing or documentation questions, follow the contributor
 instructions below; do not trigger log setup or ask for a log directory.

@@ -53,6 +53,8 @@ Launch the agent from this clone so it can discover the repository skill.
 | Claude Code | `/nimble-logs` | [.claude/skills/nimble-logs/SKILL.md](.claude/skills/nimble-logs/SKILL.md) |
 | Codex | `$whep-check` | [.agents/skills/whep-check/SKILL.md](.agents/skills/whep-check/SKILL.md) |
 | Claude Code | `/whep-check` | [.claude/skills/whep-check/SKILL.md](.claude/skills/whep-check/SKILL.md) |
+| Codex | `$mpegts-ingest-getaddrinfo-stall` | [.agents/skills/mpegts-ingest-getaddrinfo-stall/SKILL.md](.agents/skills/mpegts-ingest-getaddrinfo-stall/SKILL.md) |
+| Claude Code | `/mpegts-ingest-getaddrinfo-stall` | [.claude/skills/mpegts-ingest-getaddrinfo-stall/SKILL.md](.claude/skills/mpegts-ingest-getaddrinfo-stall/SKILL.md) |
 
 For example, in Codex:
 
@@ -206,6 +208,7 @@ than applies, server and network changes.
 | Skill | Use it for | Details |
 |---|---|---|
 | `whep-check` | Check WebRTC WHEP playback from an endpoint URL and find the failing stage | [tools/whep-check](tools/whep-check/README.md) |
+| `mpegts-ingest-getaddrinfo-stall` | MPEG-TS inputs at a fraction of their bitrate because an `mpeg2tscameraN` thread blocks in DNS resolution | [tools/mpegts-ingest-getaddrinfo-stall](tools/mpegts-ingest-getaddrinfo-stall/README.md) |
 
 ## How the instructions fit together
 
