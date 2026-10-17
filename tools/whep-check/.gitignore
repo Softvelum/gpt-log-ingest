@@ -1,0 +1,4 @@
+# Go build output of the WHEP playback client.
+/whep-check
+/whep-check.exe
+/dist/

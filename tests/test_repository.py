@@ -13,10 +13,9 @@ SKILLS = [
     ROOT / ".agents/skills/nimble-logs/SKILL.md",
     ROOT / ".claude/skills/nimble-logs/SKILL.md",
 ]
-WHEP_SKILLS = [
-    ROOT / ".agents/skills/whep-check/SKILL.md",
-    ROOT / ".claude/skills/whep-check/SKILL.md",
-]
+# every repository skill; nimble-logs is the core skill, the others are features
+ALL_SKILLS = sorted((ROOT / ".agents/skills").glob("*/SKILL.md"))
+FEATURE_SKILLS = [p for p in ALL_SKILLS if p.parent.name != "nimble-logs"]
 
 
 def local_links(path):
@@ -30,7 +29,7 @@ def local_links(path):
 
 class RepositoryTests(unittest.TestCase):
     def test_skills_have_standard_discovery_metadata(self):
-        for path in SKILLS + WHEP_SKILLS:
+        for path in SKILLS + ALL_SKILLS:
             with self.subTest(skill=path.relative_to(ROOT)):
                 match = re.match(r"\A---\n(.*?)\n---\n", path.read_text(), re.S)
                 self.assertIsNotNone(match, "Missing skill frontmatter")
@@ -49,26 +48,45 @@ class RepositoryTests(unittest.TestCase):
         self.assertTrue(SKILLS[1].is_file())
         self.assertEqual(SKILLS[0].read_bytes(), SKILLS[1].read_bytes())
 
-    def test_claude_whep_skill_directory_links_to_canonical_agents_skill(self):
-        claude_skill_dir = WHEP_SKILLS[1].parent
-        self.assertTrue(claude_skill_dir.is_symlink(), "Claude skill must link to the canonical skill directory")
-        self.assertEqual(claude_skill_dir.resolve(), WHEP_SKILLS[0].parent.resolve())
-        self.assertEqual(WHEP_SKILLS[0].read_bytes(), WHEP_SKILLS[1].read_bytes())
+    def test_every_skill_has_claude_directory_symlink(self):
+        self.assertIn(ROOT / ".agents/skills/nimble-logs/SKILL.md", ALL_SKILLS)
+        for path in ALL_SKILLS:
+            with self.subTest(skill=path.parent.name):
+                claude_dir = ROOT / ".claude/skills" / path.parent.name
+                self.assertTrue(claude_dir.is_symlink(), "Claude skill must link to the canonical skill directory")
+                self.assertEqual(claude_dir.resolve(), path.parent.resolve())
+                self.assertEqual((claude_dir / "SKILL.md").read_bytes(), path.read_bytes())
 
-    def test_whep_check_routes_to_its_workflow_and_client(self):
-        workflow = ROOT / "workflows/check-whep.md"
-        self.assertTrue(workflow.is_file(), "Missing WHEP check workflow")
-        for path in WHEP_SKILLS:
-            with self.subTest(skill=path.relative_to(ROOT)):
-                self.assertIn(workflow, set(local_links(path)))
-        self.assertIn(workflow, set(local_links(ROOT / "AGENTS.md")))
-        for name in ("go.mod", "go.sum", "main.go", "main_test.go", "stats.go", "output.go"):
-            with self.subTest(file=name):
-                self.assertTrue((ROOT / "tools/whep-check" / name).is_file())
-        text = " ".join(workflow.read_text().lower().split())
-        for phrase in ("explicit request", "must not run it", "delete", "redact"):
-            with self.subTest(phrase=phrase):
-                self.assertIn(phrase, text)
+    def test_feature_skills_have_routed_workflow_and_feature_files(self):
+        agents_links = set(local_links(ROOT / "AGENTS.md"))
+        readme = (ROOT / "README.md").read_text()
+        for path in FEATURE_SKILLS:
+            name = path.parent.name
+            with self.subTest(skill=name):
+                workflows = [t for t in local_links(path) if t.parent == ROOT / "workflows"
+                             and t.name not in ("analyze-logs.md", "test-workspace.md")]
+                self.assertEqual(len(workflows), 1, "A feature skill routes to exactly one own workflow")
+                self.assertTrue(workflows[0].is_file())
+                self.assertIn(workflows[0], agents_links, "AGENTS.md must route to the feature workflow")
+                self.assertIn("`%s`" % name, readme, "README feature table must list the skill")
+                self.assertTrue((ROOT / "docs/superpowers/features" / (name + ".md")).is_file())
+                self.assertTrue((ROOT / "tests/scenarios" / (name + ".md")).is_file())
+                module = "test_feature_%s.py" % name.replace("-", "_")
+                self.assertTrue((ROOT / "tests" / module).is_file())
+
+    def test_feature_tools_document_their_tests(self):
+        # tools are directories with tracked files; ignored build output left
+        # behind by another branch does not count
+        tracked = subprocess.run(
+            ["git", "ls-files", "--", "tools"], cwd=ROOT,
+            capture_output=True, text=True, check=True,
+        ).stdout.splitlines()
+        names = sorted({p.split("/")[1] for p in tracked if p.count("/") >= 2} - {"nimble-log-watch"})
+        for tool in (ROOT / "tools" / n for n in names):
+            with self.subTest(tool=tool.name):
+                readme = tool / "README.md"
+                self.assertTrue(readme.is_file(), "A feature tool needs a README")
+                self.assertRegex(readme.read_text(), r"(?m)^## Tests$")
 
     def test_both_skills_route_to_shared_analysis_and_tests(self):
         expected = {
@@ -101,9 +119,10 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("relay status and findings into the conversation", readme)
 
     def test_public_document_links_resolve(self):
-        files = [ROOT / "README.md", ROOT / "AGENTS.md", *SKILLS, *WHEP_SKILLS]
+        files = [ROOT / "README.md", ROOT / "AGENTS.md", *SKILLS, *ALL_SKILLS]
         for directory in ["workflows", "templates", "docs/superpowers", "tests"]:
             files.extend((ROOT / directory).rglob("*.md"))
+        files.extend((ROOT / "tools").glob("*/README.md"))
         for path in files:
             for target in local_links(path):
                 with self.subTest(document=path.relative_to(ROOT), target=str(target)):
@@ -150,7 +169,7 @@ class RepositoryTests(unittest.TestCase):
         test_step = guidance.index("5. Run `python3 -m unittest discover")
         map_step = guidance.index("6. Run `python3 scripts/build_logger_map.py")
         security_step = guidance.index(
-            "7. After all repository, behavior, map, Rust, and Go tests"
+            "7. After all repository, behavior, map, and tool tests"
         )
         self.assertLess(test_step, security_step)
         self.assertLess(map_step, security_step)

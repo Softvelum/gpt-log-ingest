@@ -20,15 +20,16 @@ catalog-index coverage, local ignore rules, and the launch-profile template.
 It never starts Nimble or invokes an AI client. Passing it proves those
 structural properties, not that an agent made a correct diagnosis.
 
-When the change touches `tools/whep-check`, also run `go vet ./...` and
-`go test ./...` in that directory. These tests use an in-process WHEP server.
-With `ffmpeg` in `PATH`, an end-to-end test also decodes real H.264 and Opus
-sent with impairments; without it that test is skipped, so report it as not run.
-Never run the WHEP client against a real endpoint as part of workspace or
-commit tests; [WHEP checks](check-whep.md) are separate, explicit requests.
+When the change touches a feature tool in `tools/<tool>/`, also run the tests
+listed in that tool's `README.md`. They use synthetic data, never contact real
+endpoints, and never control a real Nimble. Report tests skipped for a missing
+optional dependency as not run. Feature checks against real systems are
+separate, explicit requests routed by `AGENTS.md`; never run them as part of
+workspace or commit tests.
 
 Exercise relevant cases in [the behavioral scenarios](../tests/scenarios.md)
-when changing analysis or test behavior. Run them in a temporary workspace,
+and the feature scenarios in `tests/scenarios/` when changing analysis or test
+behavior. Run them in a temporary workspace,
 using synthetic fixtures and local preferences rather than real installation
 configuration. Native client discovery requires a separate client check.
 
