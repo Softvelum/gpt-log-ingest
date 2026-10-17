@@ -13,6 +13,10 @@ SKILLS = [
     ROOT / ".agents/skills/nimble-logs/SKILL.md",
     ROOT / ".claude/skills/nimble-logs/SKILL.md",
 ]
+WHEP_SKILLS = [
+    ROOT / ".agents/skills/whep-check/SKILL.md",
+    ROOT / ".claude/skills/whep-check/SKILL.md",
+]
 
 
 def local_links(path):
@@ -26,7 +30,7 @@ def local_links(path):
 
 class RepositoryTests(unittest.TestCase):
     def test_skills_have_standard_discovery_metadata(self):
-        for path in SKILLS:
+        for path in SKILLS + WHEP_SKILLS:
             with self.subTest(skill=path.relative_to(ROOT)):
                 match = re.match(r"\A---\n(.*?)\n---\n", path.read_text(), re.S)
                 self.assertIsNotNone(match, "Missing skill frontmatter")
@@ -44,6 +48,27 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(claude_skill_dir.resolve(), SKILLS[0].parent.resolve())
         self.assertTrue(SKILLS[1].is_file())
         self.assertEqual(SKILLS[0].read_bytes(), SKILLS[1].read_bytes())
+
+    def test_claude_whep_skill_directory_links_to_canonical_agents_skill(self):
+        claude_skill_dir = WHEP_SKILLS[1].parent
+        self.assertTrue(claude_skill_dir.is_symlink(), "Claude skill must link to the canonical skill directory")
+        self.assertEqual(claude_skill_dir.resolve(), WHEP_SKILLS[0].parent.resolve())
+        self.assertEqual(WHEP_SKILLS[0].read_bytes(), WHEP_SKILLS[1].read_bytes())
+
+    def test_whep_check_routes_to_its_workflow_and_client(self):
+        workflow = ROOT / "workflows/check-whep.md"
+        self.assertTrue(workflow.is_file(), "Missing WHEP check workflow")
+        for path in WHEP_SKILLS:
+            with self.subTest(skill=path.relative_to(ROOT)):
+                self.assertIn(workflow, set(local_links(path)))
+        self.assertIn(workflow, set(local_links(ROOT / "AGENTS.md")))
+        for name in ("go.mod", "go.sum", "main.go", "main_test.go", "stats.go", "output.go"):
+            with self.subTest(file=name):
+                self.assertTrue((ROOT / "tools/whep-check" / name).is_file())
+        text = " ".join(workflow.read_text().lower().split())
+        for phrase in ("explicit request", "must not run it", "delete", "redact"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
 
     def test_both_skills_route_to_shared_analysis_and_tests(self):
         expected = {
@@ -76,7 +101,7 @@ class RepositoryTests(unittest.TestCase):
         self.assertIn("relay status and findings into the conversation", readme)
 
     def test_public_document_links_resolve(self):
-        files = [ROOT / "README.md", ROOT / "AGENTS.md", *SKILLS]
+        files = [ROOT / "README.md", ROOT / "AGENTS.md", *SKILLS, *WHEP_SKILLS]
         for directory in ["workflows", "templates", "docs/superpowers", "tests"]:
             files.extend((ROOT / directory).rglob("*.md"))
         for path in files:
@@ -125,7 +150,7 @@ class RepositoryTests(unittest.TestCase):
         test_step = guidance.index("5. Run `python3 -m unittest discover")
         map_step = guidance.index("6. Run `python3 scripts/build_logger_map.py")
         security_step = guidance.index(
-            "7. After all repository, behavior, map, and Rust tests"
+            "7. After all repository, behavior, map, Rust, and Go tests"
         )
         self.assertLess(test_step, security_step)
         self.assertLess(map_step, security_step)

@@ -153,3 +153,25 @@ helper if continued polling is unavailable.
 - [x] Update the workflow, canonical skill, README, design, specification, and
   behavior scenario with prompt grouped relays and clipped-output recovery.
 - [x] Run the full repository suite, scenario review, link checks, and diff review.
+
+## Follow-up: WHEP playback check skill
+
+Add a second repository skill for checking WebRTC WHEP playback from a
+user-supplied endpoint. A Go client (Pion WebRTC) performs the WHEP exchange,
+reports signaling, ICE/DTLS, and media stages, and optionally plays or records
+the stream. The check is explicit and bounded, and it is separate from log
+analysis and workspace tests.
+
+- [x] Add `tools/whep-check` with offline Go tests against an in-process
+  ice-lite WHEP server (media plus `DELETE`, signaling failure, ICE timeout).
+- [x] Add `workflows/check-whep.md`, the canonical `whep-check` skill, and its
+  Claude directory symlink; route WHEP checks from `AGENTS.md`.
+- [x] Update the README, design, specification, test workflow, behavior
+  scenarios, and repository tests.
+- [x] Run Go vet/tests, the Python suite, the map check, and diff checks.
+- [x] Report media format (SPS/PPS, Opus TOC) with SDP and level checks.
+- [x] Count lost, late, and duplicate packets, NACKs and PLIs, keyframes per
+  frame and GOP; classify delivery gaps against RTP time.
+- [x] Replace UDP/SDP forwarding with a jitter buffer, complete-frame assembly,
+  and live Matroska for `-play` (player stdin) and `-record` (.mkv).
+- [x] Add unit tests and an optional ffmpeg end-to-end test with impairments.

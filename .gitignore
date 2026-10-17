@@ -6,3 +6,8 @@ __pycache__/
 
 # Rust build output for the optional local log watcher.
 /tools/nimble-log-watch/target/
+
+# Go build output for the optional WHEP playback client.
+/tools/whep-check/whep-check
+/tools/whep-check/whep-check.exe
+/tools/whep-check/dist/
